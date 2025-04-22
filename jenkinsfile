@@ -4,26 +4,21 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    extensions: [],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/Atharv1708/exif-flask-app-main.git'
-                    ]]
-                ])
+                checkout scm
             }
         }
         
         stage('Install Dependencies') {
             steps {
-                bat 'pip install -r requirements.txt'
+                bat 'C:\\Python39\\python.exe -m pip install -r requirements.txt'
+                // OR if Python is in Program Files:
+                // bat '"C:\\Program Files\\Python39\\python.exe" -m pip install -r requirements.txt'
             }
         }
         
         stage('Run Tests') {
             steps {
-                bat 'pytest tests/'
+                bat 'C:\\Python39\\python.exe -m pytest tests/'
             }
         }
     }
