@@ -4,11 +4,21 @@ pipeline {
     environment {
         PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
         VENV_DIR = "${WORKSPACE}\\venv"
-        FLASK_URL = "http://localhost:5000"
-        FLASK_APP = "app.py"
+        FLASK_URL = "http://localhost:5001"
+        UPLOAD_FOLDER = "${WORKSPACE}\\uploads"
     }
     
     stages {
+        stage('Prepare Environment') {
+            steps {
+                bat """
+                    IF NOT EXIST "${env.UPLOAD_FOLDER}" (
+                        mkdir "${env.UPLOAD_FOLDER}"
+                    )
+                """
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -33,6 +43,7 @@ pipeline {
             steps {
                 bat """
                     call "${env.VENV_DIR}\\Scripts\\activate"
+                    set UPLOAD_FOLDER=${env.UPLOAD_FOLDER}
                     python -m pytest tests/test_app.py --junitxml=test-results.xml
                 """
             }
@@ -47,46 +58,36 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Start Flask server and capture PID
+                        // Start Flask with explicit upload folder
                         bat """
                             call "${env.VENV_DIR}\\Scripts\\activate"
-                            python ${env.FLASK_APP} &
+                            set UPLOAD_FOLDER=${env.UPLOAD_FOLDER}
+                            python app.py &
                             echo %^! > flask_pid.txt
                         """
                         
-                        // Get the process ID
                         flask_pid = readFile('flask_pid.txt').trim()
                         
-                        // Wait for server to start (up to 30 seconds)
+                        // Wait for server with retries
                         def ready = false
                         def attempts = 0
                         while (!ready && attempts < 30) {
                             attempts++
                             sleep time: 1, unit: 'SECONDS'
-                            try {
-                                response = bat(
-                                    script: """
-                                        call "${env.VENV_DIR}\\Scripts\\activate"
-                                        python -c "import requests; r = requests.get('${env.FLASK_URL}', timeout=5); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text"
-                                    """,
-                                    returnStatus: true
-                                )
-                                if (response == 0) {
-                                    ready = true
-                                    echo "HTML hosting verification successful"
-                                }
-                            } catch (Exception e) {
-                                echo "Attempt ${attempts}: Server not ready yet..."
+                            response = bat(
+                                script: """
+                                    call "${env.VENV_DIR}\\Scripts\\activate"
+                                    python -c "import requests; r = requests.get('${env.FLASK_URL}', timeout=5); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text"
+                                """,
+                                returnStatus: true
+                            )
+                            if (response == 0) {
+                                ready = true
+                                echo "HTML verification successful"
                             }
                         }
-                        
-                        if (!ready) {
-                            error("Flask server did not become ready within 30 seconds")
-                        }
-                    } catch (Exception e) {
-                        error("HTML hosting verification failed: ${e.getMessage()}")
+                        if (!ready) error("Server didn't start in 30 seconds")
                     } finally {
-                        // Stop Flask server
                         bat """
                             for /f "tokens=1" %%i in (flask_pid.txt) do taskkill /PID %%i /F
                             del flask_pid.txt 2>nul || exit 0
@@ -99,17 +100,8 @@ pipeline {
 
     post {
         always {
-            // Final cleanup
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
-            
-            script {
-                if (currentBuild.result == 'SUCCESS') {
-                    echo "Pipeline succeeded! App is running at ${env.FLASK_URL}"
-                } else {
-                    echo "Pipeline failed. Check console output for details."
-                }
-            }
         }
     }
 }
