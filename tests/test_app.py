@@ -59,5 +59,5 @@ class FlaskAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'No video metadata found.', response.data)
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     unittest.main()
