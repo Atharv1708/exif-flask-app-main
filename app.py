@@ -136,6 +136,7 @@ def index():
                 return render_template("index.html", error="Invalid file format.", file_url=file_url)
     
     return render_template("index.html")
+    return "File Metadata Extractor"
 
 # Route to serve uploaded files (image or video)
 @app.route('/uploads/<filename>')
