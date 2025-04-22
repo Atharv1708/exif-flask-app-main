@@ -4,15 +4,19 @@ pipeline {
     environment {
         PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
         VENV_DIR = "${WORKSPACE}\\venv"
+        FLASK_URL = "http://localhost:5000"
+        FLASK_APP = "app.py"
     }
     
     stages {
+        // CI Stage - Code Checkout
         stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
 
+        // CI Stage - Environment Setup
         stage('Setup Environment') {
             steps {
                 bat """
@@ -22,11 +26,12 @@ pipeline {
                     "${env.PYTHON}" -m venv "${env.VENV_DIR}"
                     call "${env.VENV_DIR}\\Scripts\\activate"
                     python -m pip install --upgrade pip
-                    pip install -r requirements.txt
+                    pip install -r requirements.txt requests
                 """
             }
         }
 
+        // CT Stage - Unit Testing
         stage('Run Tests') {
             steps {
                 bat """
@@ -40,15 +45,56 @@ pipeline {
                 }
             }
         }
+
+        // CD Stage - Deployment Verification
+        stage('Verify HTML Hosting') {
+            steps {
+                script {
+                    // Start Flask in background
+                    bat """
+                        call "${env.VENV_DIR}\\Scripts\\activate"
+                        start "FlaskApp" python ${env.FLASK_APP}
+                    """
+                    
+                    // Wait for app to start
+                    sleep time: 15, unit: 'SECONDS'
+                    
+                    // Verify hosting
+                    try {
+                        def response = bat(
+                            script: """
+                                call "${env.VENV_DIR}\\Scripts\\activate"
+                                python -c "import requests; r = requests.get('${env.FLASK_URL}'); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text; print('HTML verification successful')"
+                            """,
+                            returnStatus: true
+                        )
+                        
+                        if (response != 0) {
+                            error("HTML hosting verification failed")
+                        }
+                    } finally {
+                        // Ensure Flask process is stopped
+                        bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
+            // Final cleanup
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
-        }
-        success {
-            echo 'Pipeline completed successfully!'
+            
+            // Send notification
+            script {
+                if (currentBuild.result == 'SUCCESS') {
+                    echo "Pipeline succeeded! App is running at ${env.FLASK_URL}"
+                } else {
+                    echo "Pipeline failed. Check console output for details."
+                }
+            }
         }
     }
 }
