@@ -4,10 +4,21 @@ pipeline {
     environment {
         PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
         VENV_DIR = "${WORKSPACE}\\venv"
-        PYTHONPATH = "${WORKSPACE}"  // Critical fix for module imports
+        PYTHONPATH = "${WORKSPACE}"
+        UPLOAD_FOLDER = "${WORKSPACE}\\uploads"
     }
     
     stages {
+        stage('Prepare Environment') {
+            steps {
+                bat """
+                    IF NOT EXIST "${UPLOAD_FOLDER}" (
+                        mkdir "${UPLOAD_FOLDER}"
+                    )
+                """
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -29,7 +40,7 @@ pipeline {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    python -m pip install --upgrade pip
+                    python -m pip install --upgrade pip pytest==7.4.0
                     pip install -r requirements.txt --no-cache-dir
                 """
             }
@@ -40,7 +51,7 @@ pipeline {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
                     set PYTHONPATH=${WORKSPACE}
-                    cd tests && python -m pytest test_app.py --junitxml=../test-results.xml -v
+                    python -m pytest tests/ --junitxml=test-results.xml -v --disable-warnings
                 """
             }
             post {
@@ -55,9 +66,10 @@ pipeline {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
                     set PYTHONPATH=${WORKSPACE}
-                    start "FlaskApp" python app.py
+                    set FLASK_APP=app.py
+                    start "FlaskApp" python -m flask run --host=0.0.0.0 --port=5000
                 """
-                sleep 10  // Wait for app to start
+                sleep 10
             }
         }
     }
@@ -66,12 +78,6 @@ pipeline {
         always {
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
-        }
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed! Check the logs above for errors.'
         }
     }
 }
