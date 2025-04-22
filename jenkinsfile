@@ -2,71 +2,87 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
+        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
         VENV_DIR = "${WORKSPACE}\\venv"
-        PYTHONPATH = "${WORKSPACE}"
+        DOCKER_IMAGE = "yourrepo/exif-flask-app:${env.BUILD_ID}"
     }
     
     stages {
-        stage('Checkout Code') {
-            steps {
-                checkout scm
-            }
+        // CI Stages
+        stage('Checkout') {
+            steps { checkout scm }
         }
 
-        stage('Setup Virtual Environment') {
+        stage('Setup') {
             steps {
                 bat """
-                    IF EXIST "${VENV_DIR}" (
-                        rmdir /s /q "${VENV_DIR}"
-                    )
                     "${PYTHON}" -m venv "${VENV_DIR}"
-                """
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    python -m pip install --upgrade pip
                     pip install -r requirements.txt
                 """
             }
         }
 
-        stage('Run Basic Tests') {
+        // CT Stages
+        stage('Test') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    set PYTHONPATH=${WORKSPACE}
-                    python -m pytest tests/test_app.py --junitxml=test-results.xml -v
+                    pytest tests/ --junitxml=test-results.xml --cov=.
                 """
             }
             post {
-                always {
-                    junit 'test-results.xml'
+                always { junit 'test-results.xml' }
+            }
+        }
+
+        // CD Stages
+        stage('Build Docker') {
+            when { branch 'main' }
+            steps {
+                script {
+                    docker.build(DOCKER_IMAGE)
                 }
             }
         }
 
-        stage('Run Application') {
+        stage('Deploy to Staging') {
+            when { branch 'main' }
             steps {
-                bat """
-                    call "${VENV_DIR}\\Scripts\\activate"
-                    set PYTHONPATH=${WORKSPACE}
-                    set FLASK_APP=app.py
-                    start "FlaskApp" python -m flask run --host=0.0.0.0 --port=5000
-                """
-                sleep 10
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', 'docker-creds') {
+                        docker.image(DOCKER_IMAGE).push()
+                    }
+                    // Add your deployment commands here
+                    // Example: kubectl apply -f k8s/staging.yaml
+                }
+            }
+        }
+
+        stage('Deploy to Production') {
+            when { 
+                branch 'main'
+                beforeInput true
+            }
+            input {
+                message "Deploy to production?"
+                ok "Deploy"
+            }
+            steps {
+                script {
+                    // Add production deployment commands
+                    // Example: kubectl apply -f k8s/production.yaml
+                }
             }
         }
     }
 
     post {
         always {
-            bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
+            script {
+                currentBuild.result = currentBuild.result ?: 'SUCCESS'
+            }
         }
     }
 }
