@@ -62,5 +62,5 @@ class FlaskAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(b'No video metadata' in response.data or b'Invalid file format' in response.data)
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     unittest.main()
