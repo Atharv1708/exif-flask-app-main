@@ -9,14 +9,12 @@ pipeline {
     }
     
     stages {
-        // CI Stage - Code Checkout
         stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
 
-        // CI Stage - Environment Setup
         stage('Setup Environment') {
             steps {
                 bat """
@@ -31,7 +29,6 @@ pipeline {
             }
         }
 
-        // CT Stage - Unit Testing
         stage('Run Tests') {
             steps {
                 bat """
@@ -46,35 +43,54 @@ pipeline {
             }
         }
 
-        // CD Stage - Deployment Verification
         stage('Verify HTML Hosting') {
             steps {
                 script {
-                    // Start Flask in background
-                    bat """
-                        call "${env.VENV_DIR}\\Scripts\\activate"
-                        start "FlaskApp" python ${env.FLASK_APP}
-                    """
-                    
-                    // Wait for app to start
-                    sleep time: 15, unit: 'SECONDS'
-                    
-                    // Verify hosting
                     try {
-                        def response = bat(
-                            script: """
-                                call "${env.VENV_DIR}\\Scripts\\activate"
-                                python -c "import requests; r = requests.get('${env.FLASK_URL}'); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text; print('HTML verification successful')"
-                            """,
-                            returnStatus: true
-                        )
+                        // Start Flask server in a way that Jenkins can track it
+                        bat """
+                            call "${env.VENV_DIR}\\Scripts\\activate"
+                            python ${env.FLASK_APP} &
+                            echo $! > flask_pid.txt
+                        """
                         
-                        if (response != 0) {
-                            error("HTML hosting verification failed")
+                        // Get the process ID
+                        flask_pid = readFile('flask_pid.txt').trim()
+                        
+                        // Wait for server to start (up to 30 seconds)
+                        def ready = false
+                        def attempts = 0
+                        while (!ready && attempts < 30) {
+                            attempts++
+                            sleep time: 1, unit: 'SECONDS'
+                            try {
+                                response = bat(
+                                    script: """
+                                        call "${env.VENV_DIR}\\Scripts\\activate"
+                                        python -c "import requests; r = requests.get('${env.FLASK_URL}', timeout=5); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text"
+                                    """,
+                                    returnStatus: true
+                                )
+                                if (response == 0) {
+                                    ready = true
+                                    echo "HTML hosting verification successful"
+                                }
+                            } catch (Exception e) {
+                                echo "Attempt ${attempts}: Server not ready yet..."
+                            }
                         }
+                        
+                        if (!ready) {
+                            error("Flask server did not become ready within 30 seconds")
+                        }
+                    } catch (Exception e) {
+                        error("HTML hosting verification failed: ${e.getMessage()}")
                     } finally {
-                        // Ensure Flask process is stopped
-                        bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
+                        // Stop Flask server
+                        bat """
+                            taskkill /F /PID ${flask_pid} 2>nul || exit 0
+                            del flask_pid.txt 2>nul || exit 0
+                        """
                     }
                 }
             }
@@ -87,7 +103,6 @@ pipeline {
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
             
-            // Send notification
             script {
                 if (currentBuild.result == 'SUCCESS') {
                     echo "Pipeline succeeded! App is running at ${env.FLASK_URL}"
