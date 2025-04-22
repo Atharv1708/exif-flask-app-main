@@ -47,11 +47,11 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Start Flask server in a way that Jenkins can track it
+                        // Start Flask server and capture PID
                         bat """
                             call "${env.VENV_DIR}\\Scripts\\activate"
                             python ${env.FLASK_APP} &
-                            echo $! > flask_pid.txt
+                            echo %^! > flask_pid.txt
                         """
                         
                         // Get the process ID
@@ -88,7 +88,7 @@ pipeline {
                     } finally {
                         // Stop Flask server
                         bat """
-                            taskkill /F /PID ${flask_pid} 2>nul || exit 0
+                            for /f "tokens=1" %%i in (flask_pid.txt) do taskkill /PID %%i /F
                             del flask_pid.txt 2>nul || exit 0
                         """
                     }
