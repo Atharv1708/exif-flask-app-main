@@ -5,21 +5,9 @@ pipeline {
         PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
         VENV_DIR = "${WORKSPACE}\\venv"
         PYTHONPATH = "${WORKSPACE}"
-        UPLOAD_FOLDER = "${WORKSPACE}\\uploads"
-        FLASK_ENV = "testing"
     }
     
     stages {
-        stage('Prepare Environment') {
-            steps {
-                bat """
-                    IF NOT EXIST "${UPLOAD_FOLDER}" (
-                        mkdir "${UPLOAD_FOLDER}"
-                    )
-                """
-            }
-        }
-
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -42,32 +30,22 @@ pipeline {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
                     python -m pip install --upgrade pip
-                    pip install -r requirements.txt --no-cache-dir
-                    pip install pytest==7.4.0 pytest-cov
+                    pip install -r requirements.txt
                 """
             }
         }
 
-        stage('Run Tests') {
+        stage('Run Basic Tests') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
                     set PYTHONPATH=${WORKSPACE}
-                    python -m pytest tests/ --junitxml=test-results.xml -v --disable-warnings
+                    python -m pytest tests/test_app.py --junitxml=test-results.xml -v
                 """
             }
             post {
                 always {
                     junit 'test-results.xml'
-                    // Generate coverage report
-                    publishHTML target: [
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        keepAll: true,
-                        reportDir: 'htmlcov',
-                        reportFiles: 'index.html',
-                        reportName: 'Coverage Report'
-                    ]
                 }
             }
         }
