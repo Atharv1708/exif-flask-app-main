@@ -1,0 +1,48 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_DIR = 'exif-flask-app'  // Directory for your app
+        VENV = 'venv'  // Virtual environment directory
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                // Checkout the GitHub repository
+                git 'https://github.com/Shlok-Aashay/exif-flask-app.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                // Create a virtual environment and install dependencies
+                sh 'python3 -m venv venv'
+                sh './venv/bin/pip install -r requirements.txt'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                // Run tests using unittest or pytest
+                sh './venv/bin/python -m unittest discover -s tests'
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                // Deploy the Flask app (adjust as per your environment)
+                sh 'nohup ./venv/bin/python app.py &'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed.'
+        }
+    }
+}
