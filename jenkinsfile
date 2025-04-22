@@ -1,10 +1,10 @@
 pipeline {
     agent any
-    
+
     environment {
-        // Set Python path here, ensuring it matches the installation on your system
-        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update this path based on your Python installation
+        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
         VENV_DIR = "${WORKSPACE}\\venv"
+        PYTHONPATH = "${WORKSPACE}"  // Critical fix for module imports
     }
     
     stages {
@@ -13,8 +13,8 @@ pipeline {
                 checkout scm
             }
         }
-        
-        stage('Setup Python Environment') {
+
+        stage('Setup Virtual Environment') {
             steps {
                 bat """
                     IF EXIST "${VENV_DIR}" (
@@ -24,65 +24,46 @@ pipeline {
                 """
             }
         }
-        
+
         stage('Install Dependencies') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
+                    python -m pip install --upgrade pip
+                    pip install -r requirements.txt --no-cache-dir
                 """
             }
         }
-        
+
         stage('Run Tests') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    pytest tests/ --junitxml=test-results.xml
+                    set PYTHONPATH=${WORKSPACE}
+                    cd tests && python -m pytest test_app.py --junitxml=../test-results.xml -v
                 """
             }
             post {
                 always {
-                    junit '/test-results.xml'  // Adjust to the correct path of your test results
+                    junit 'test-results.xml'
                 }
             }
         }
-        
+
         stage('Run Application') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    start "" "flask run --host=0.0.0.0 --port=5001"
+                    set PYTHONPATH=${WORKSPACE}
+                    start "FlaskApp" python app.py
                 """
-                // Wait for Flask to start (adjust sleep time as needed)
-                sleep 10
-            }
-        }
-        
-        // Docker Build and Deploy Stages
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    // Using bat to run Docker build on Windows
-                    bat 'docker build -t exif-flask-app .'
-                }
-            }
-        }
-        
-        stage('Deploy Docker Container') {
-            steps {
-                script {
-                    // Corrected port mapping to 5001 and using bat to run docker on Windows
-                    bat 'docker run -d -p 5001:5001 exif-flask-app'
-                }
+                sleep 10  // Wait for app to start
             }
         }
     }
-    
+
     post {
         always {
-            // Clean up processes
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
         }
@@ -90,7 +71,7 @@ pipeline {
             echo 'Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed!'
+            echo 'Pipeline failed! Check the logs above for errors.'
         }
     }
 }
