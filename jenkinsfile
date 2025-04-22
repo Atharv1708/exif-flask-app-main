@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'C:\Users\Dell\AppData\Local\Programs\Python\Python313\python.exe'  // Update to your Python path
+        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
         VENV_DIR = "${WORKSPACE}\\venv"
         FLASK_VERSION = "2.3.2"  // Explicit Flask version
         PYTEST_FLASK_VERSION = "1.2.0"  // Compatible pytest-flask version
