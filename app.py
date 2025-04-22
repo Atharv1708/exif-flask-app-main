@@ -8,7 +8,7 @@ import ffmpeg
 import subprocess
 import json
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # Set allowed file extensions and max file size
 ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png'}
@@ -143,7 +143,7 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Run the Flask app
-if _name_ == '_main_':
+if __name__ == '__main__':
     # Ensure the 'uploads' folder exists, create if not
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
