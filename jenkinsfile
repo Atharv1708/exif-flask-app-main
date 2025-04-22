@@ -1,139 +1,46 @@
 pipeline {
     agent any
-
+    
     environment {
-        // Default Python paths - will be updated during execution
-        PYTHON = 'python'
-        PIP = 'pip'
+        // Set Python path here, ensuring it matches the installation on your system
+        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update this path based on your Python installation
         VENV_DIR = "${WORKSPACE}\\venv"
-        FLASK_PORT = "5001"
     }
     
     stages {
-        stage('Verify/Install Python') {
-            steps {
-                script {
-                    if (isUnix()) {
-                        // Linux/macOS
-                        sh '''#!/bin/bash
-                            # Check for Python 3
-                            if ! command -v python3 &> /dev/null; then
-                                echo "Installing Python 3..."
-                                sudo apt-get update
-                                sudo apt-get install -y python3 python3-pip python3-venv
-                            fi
-                            python3 --version
-                        '''
-                        env.PYTHON = 'python3'
-                        env.PIP = 'pip3'
-                    } else {
-                        // Windows
-                        bat '''
-                            @echo off
-                            REM Check for Python in standard locations
-                            where python >nul 2>&1
-                            if %ERRORLEVEL% equ 0 (
-                                echo Python is already installed
-                                python --version
-                            ) else (
-                                echo Installing Python...
-                                
-                                REM Try winget first
-                                where winget >nul 2>&1
-                                if %ERRORLEVEL% equ 0 (
-                                    winget install Python.Python.3.12 --silent
-                                ) else (
-                                    REM Fallback to downloading directly
-                                    curl -o python-installer.exe https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe
-                                    python-installer.exe /quiet InstallAllUsers=1 PrependPath=1
-                                    del python-installer.exe
-                                )
-                                
-                                where python >nul || (
-                                    echo Python installation failed
-                                    exit 1
-                                )
-                            )
-                            
-                            REM Update PATH if needed
-                            setx PATH "%PATH%;C:\\Python312;C:\\Python312\\Scripts"
-                        '''
-                        // Update environment variables after potential installation
-                        env.PYTHON = 'C:\\Python312\\python.exe'
-                        env.PIP = 'C:\\Python312\\Scripts\\pip.exe'
-                    }
-                }
-            }
-        }
-
         stage('Checkout Code') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    extensions: [],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/Atharv1708/exif-flask-app-main.git'
-                    ]]
-                ])
+                checkout scm
             }
         }
-
-        stage('Setup Virtual Environment') {
+        
+        stage('Setup Python Environment') {
             steps {
-                script {
-                    if (isUnix()) {
-                        sh """
-                            [ -d "${VENV_DIR}" ] && rm -rf "${VENV_DIR}"
-                            ${env.PYTHON} -m venv "${VENV_DIR}"
-                        """
-                    } else {
-                        bat """
-                            IF EXIST "${VENV_DIR}" (
-                                rmdir /s /q "${VENV_DIR}"
-                            )
-                            "${env.PYTHON}" -m venv "${VENV_DIR}"
-                        """
-                    }
-                }
+                bat """
+                    IF EXIST "${VENV_DIR}" (
+                        rmdir /s /q "${VENV_DIR}"
+                    )
+                    "${PYTHON}" -m venv "${VENV_DIR}"
+                """
             }
         }
-
+        
         stage('Install Dependencies') {
             steps {
-                script {
-                    if (isUnix()) {
-                        sh """
-                            . "${VENV_DIR}/bin/activate"
-                            ${env.PIP} install --upgrade pip
-                            ${env.PIP} install -r requirements.txt
-                        """
-                    } else {
-                        bat """
-                            call "${VENV_DIR}\\Scripts\\activate"
-                            "${env.PIP}" install --upgrade pip
-                            "${env.PIP}" install -r requirements.txt
-                        """
-                    }
-                }
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                """
             }
         }
-
+        
         stage('Run Tests') {
             steps {
-                script {
-                    if (isUnix()) {
-                        sh """
-                            . "${VENV_DIR}/bin/activate"
-                            pytest tests/ --junitxml=test-results.xml
-                        """
-                    } else {
-                        bat """
-                            call "${VENV_DIR}\\Scripts\\activate"
-                            python -m pytest tests/ --junitxml=test-results.xml
-                        """
-                    }
-                }
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    pytest tests/ --junitxml=test-results.xml
+                """
             }
             post {
                 always {
@@ -141,66 +48,49 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Run Application') {
             steps {
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    start "" "flask run --host=0.0.0.0 --port=5001"
+                """
+                // Wait for Flask to start (adjust sleep time as needed)
+                sleep 10
+            }
+        }
+        
+        // Docker Build and Deploy Stages
+        stage('Build Docker Image') {
+            steps {
                 script {
-                    if (isUnix()) {
-                        sh """
-                            . "${VENV_DIR}/bin/activate"
-                            nohup flask run --host=0.0.0.0 --port=${FLASK_PORT} > flask.log 2>&1 &
-                            sleep 10
-                        """
-                    } else {
-                        bat """
-                            call "${VENV_DIR}\\Scripts\\activate"
-                            start "FlaskApp" python -m flask run --host=0.0.0.0 --port=${FLASK_PORT}
-                            timeout /t 10 /nobreak
-                        """
-                    }
+                    // Using bat to run Docker build on Windows
+                    bat 'docker build -t exif-flask-app .'
                 }
             }
         }
-
-        stage('Verify Application') {
+        
+        stage('Deploy Docker Container') {
             steps {
                 script {
-                    if (isUnix()) {
-                        sh """
-                            curl -s http://localhost:${FLASK_PORT} | grep "EXIF Data Viewer" || exit 1
-                        """
-                    } else {
-                        bat """
-                            curl http://localhost:${FLASK_PORT} | findstr "EXIF Data Viewer" || exit /b 1
-                        """
-                    }
+                    // Corrected port mapping to 5001 and using bat to run docker on Windows
+                    bat 'docker run -d -p 5001:5001 exif-flask-app'
                 }
             }
         }
     }
-
+    
     post {
         always {
-            script {
-                echo "Cleaning up..."
-                if (isUnix()) {
-                    sh """
-                        pkill -f "flask run" || true
-                    """
-                } else {
-                    bat """
-                        taskkill /F /IM python.exe /T 2>nul || exit 0
-                    """
-                }
-                cleanWs()
-            }
+            // Clean up processes
+            bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
+            cleanWs()
         }
         success {
-            echo "Pipeline completed successfully! Application running on port ${FLASK_PORT}"
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "Pipeline failed! Check the logs above for errors."
-            // Additional failure notifications can be added here
+            echo 'Pipeline failed!'
         }
     }
 }
