@@ -1,59 +1,60 @@
 import unittest
 import os
-import tempfile
+import io
 from app import app
 
-class FlaskExifTestCase(unittest.TestCase):
+class FlaskAppBasicTests(unittest.TestCase):
     def setUp(self):
-        # Configure test upload folder
-        self.upload_folder = tempfile.mkdtemp()
-        app.config['UPLOAD_FOLDER'] = self.upload_folder
+        # Configure test client
         app.config['TESTING'] = True
-        
+        app.config['UPLOAD_FOLDER'] = 'test_uploads'
         self.app = app.test_client()
         
-        # Create a test file
-        self.test_file = os.path.join(self.upload_folder, 'test.jpg')
-        with open(self.test_file, 'wb') as f:
-            f.write(b'Test file content')
+        # Create test upload directory
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     def tearDown(self):
-        # Clean up test files
-        for filename in os.listdir(self.upload_folder):
-            file_path = os.path.join(self.upload_folder, filename)
+        # Clean up test upload directory
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             if os.path.isfile(file_path):
                 os.unlink(file_path)
-        os.rmdir(self.upload_folder)
+        os.rmdir(app.config['UPLOAD_FOLDER'])
 
     def test_home_page(self):
+        """Test that home page loads correctly"""
         response = self.app.get('/')
         self.assertEqual(response.status_code, 200)
-        response_text = response.data.decode('utf-8')
-        self.assertIn('File Metadata Extractor', response_text)
+        self.assertIn(b'File Metadata Extractor', response.data)
 
     def test_file_upload(self):
-        with open(self.test_file, 'rb') as f:
-            response = self.app.post(
-                '/',
-                data={'file': (f, 'test.jpg')},
-                content_type='multipart/form-data'
-            )
-        self.assertEqual(response.status_code, 200)
-        response_text = response.data.decode('utf-8')
-        self.assertIn('Extracted Metadata', response_text)
-
-    def test_invalid_file_upload(self):
+        """Test valid file upload"""
+        # Create a test file
+        test_file = (io.BytesIO(b'fake image data'), 'test.jpg')
+        
         response = self.app.post(
             '/',
-            data={'file': (io.BytesIO(b'not an image'), 'test.txt'},
+            data={'file': test_file},
+            content_type='multipart/form-data'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Extracted Metadata', response.data)
+
+    def test_invalid_file_upload(self):
+        """Test invalid file upload"""
+        response = self.app.post(
+            '/',
+            data={'file': (io.BytesIO(b'not an image'), 'test.txt')},
             content_type='multipart/form-data'
         )
         self.assertEqual(response.status_code, 400)
-        response_text = response.data.decode('utf-8')
-        self.assertIn('Invalid file format', response_text)
+        self.assertIn(b'Invalid file format', response.data)
 
     def test_no_file_upload(self):
+        """Test submission with no file"""
         response = self.app.post('/', data={})
         self.assertEqual(response.status_code, 400)
-        response_text = response.data.decode('utf-8')
-        self.assertIn('No file selected', response_text)
+        self.assertIn(b'No file selected', response.data)
+
+if __name__ == '__main__':
+    unittest.main()
