@@ -1,11 +1,10 @@
 pipeline {
     agent any
-
+    
     environment {
-        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update to your Python path
+        // Set Python path here, ensuring it matches the installation on your system
+        PYTHON = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'  // Update this path based on your Python installation
         VENV_DIR = "${WORKSPACE}\\venv"
-        FLASK_VERSION = "2.3.2"  // Explicit Flask version
-        PYTEST_FLASK_VERSION = "1.2.0"  // Compatible pytest-flask version
     }
     
     stages {
@@ -14,8 +13,8 @@ pipeline {
                 checkout scm
             }
         }
-
-        stage('Setup Virtual Environment') {
+        
+        stage('Setup Python Environment') {
             steps {
                 bat """
                     IF EXIST "${VENV_DIR}" (
@@ -25,46 +24,65 @@ pipeline {
                 """
             }
         }
-
+        
         stage('Install Dependencies') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    python -m pip install --upgrade pip
-                    pip install flask==${FLASK_VERSION}
-                    pip install pytest-flask==${PYTEST_FLASK_VERSION}
-                    pip install -r requirements.txt --no-cache-dir
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
                 """
             }
         }
-
+        
         stage('Run Tests') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    pytest tests/ --junitxml=test-results.xml -v
+                    pytest tests/ --junitxml=test-results.xml
                 """
             }
             post {
                 always {
-                    junit 'test-results.xml'
+                    junit '/test-results.xml'  // Adjust to the correct path of your test results
                 }
             }
         }
-
+        
         stage('Run Application') {
             steps {
                 bat """
                     call "${VENV_DIR}\\Scripts\\activate"
-                    start "FlaskApp" python app.py
+                    start "" "flask run --host=0.0.0.0 --port=5001"
                 """
-                sleep 10  // Wait for app to start
+                // Wait for Flask to start (adjust sleep time as needed)
+                sleep 10
+            }
+        }
+        
+        // Docker Build and Deploy Stages
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Using bat to run Docker build on Windows
+                    bat 'docker build -t exif-flask-app .'
+                }
+            }
+        }
+        
+        stage('Deploy Docker Container') {
+            steps {
+                script {
+                    // Corrected port mapping to 5001 and using bat to run docker on Windows
+                    bat 'docker run -d -p 5001:5001 exif-flask-app'
+                }
             }
         }
     }
-
+    
     post {
         always {
+            // Clean up processes
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
             cleanWs()
         }
@@ -72,7 +90,7 @@ pipeline {
             echo 'Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed! Check the logs above for errors.'
+            echo 'Pipeline failed!'
         }
     }
 }
