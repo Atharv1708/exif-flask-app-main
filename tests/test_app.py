@@ -6,13 +6,13 @@ class TestIndexPage(unittest.TestCase):
         app.config['TESTING'] = True
         self.client = app.test_client()
 
- def test_index_page_loads(self):
-    response = self.client.get('/')
-    assert response.status_code == 200
+    def test_index_page_loads(self):
+        """Test that index page loads successfully and contains main heading"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
 
-        
-        # Update this to match your actual page content:
-        self.assertIn(b'Your Expected Page Title', response.data)
+        # Check that the response includes the main title from index.html
+        self.assertIn(b'EXIF Data Extractor', response.data)
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     unittest.main()
