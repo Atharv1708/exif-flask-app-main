@@ -1,23 +1,77 @@
 pipeline {
     agent any
     
+    environment {
+        // Update these paths to match your actual Python installation
+        PYTHON = 'C:\\Python39\\python.exe'
+        VENV_DIR = "${WORKSPACE}\\venv"
+    }
+    
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
         
+        stage('Setup Python Environment') {
+            steps {
+                bat """
+                    IF EXIST "${VENV_DIR}" (
+                        rmdir /s /q "${VENV_DIR}"
+                    )
+                    "${PYTHON}" -m venv "${VENV_DIR}"
+                """
+            }
+        }
+        
         stage('Install Dependencies') {
             steps {
-                bat 'python -m pip install -r requirements.txt'
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                """
             }
         }
         
         stage('Run Tests') {
             steps {
-                bat 'python -m pytest tests/'
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    pytest tests/ --junitxml=test-results.xml
+                """
             }
+            post {
+                always {
+                    junit 'test-results.xml'
+                }
+            }
+        }
+        
+        stage('Run Application') {
+            steps {
+                bat """
+                    call "${VENV_DIR}\\Scripts\\activate"
+                    start "" "flask run --host=0.0.0.0 --port=5000"
+                """
+                // Wait for Flask to start (adjust sleep time as needed)
+                sleep 10
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean up processes
+            bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }
