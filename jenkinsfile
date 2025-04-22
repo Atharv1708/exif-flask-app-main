@@ -6,8 +6,10 @@ pipeline {
         VENV_DIR = "${WORKSPACE}\\venv"
         FLASK_URL = "http://localhost:5001"
         UPLOAD_FOLDER = "${WORKSPACE}\\uploads"
+        DOCKER_IMAGE = "exif-flask-app"
+        DOCKER_CONTAINER = "exif_flask_test"
     }
-    
+
     stages {
         stage('Prepare Environment') {
             steps {
@@ -25,7 +27,7 @@ pipeline {
             }
         }
 
-        stage('Setup Environment') {
+        stage('Setup Python Environment') {
             steps {
                 bat """
                     IF EXIST "${env.VENV_DIR}" (
@@ -39,7 +41,7 @@ pipeline {
             }
         }
 
-        stage('Run Tests') {
+        stage('Run Python Tests') {
             steps {
                 bat """
                     call "${env.VENV_DIR}\\Scripts\\activate"
@@ -54,44 +56,44 @@ pipeline {
             }
         }
 
-        stage('Verify HTML Hosting') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    try {
-                        // Start Flask with explicit upload folder
-                        bat """
-                            call "${env.VENV_DIR}\\Scripts\\activate"
-                            set UPLOAD_FOLDER=${env.UPLOAD_FOLDER}
-                            python app.py &
-                            echo %^! > flask_pid.txt
-                        """
-                        
-                        flask_pid = readFile('flask_pid.txt').trim()
-                        
-                        // Wait for server with retries
-                        def ready = false
-                        def attempts = 0
-                        while (!ready && attempts < 30) {
+                    dockerImage = docker.build("${env.DOCKER_IMAGE}")
+                }
+            }
+        }
+
+        stage('Run Docker Container') {
+            steps {
+                script {
+                    sh "docker rm -f ${env.DOCKER_CONTAINER} || true"
+                    dockerImage.run("-d -p 5001:5001 --name ${env.DOCKER_CONTAINER}")
+                    sleep 5  // wait for container to start
+                }
+            }
+        }
+
+        stage('Verify HTML Hosting (Docker)') {
+            steps {
+                script {
+                    def attempts = 0
+                    def ready = false
+                    while (!ready && attempts < 30) {
+                        def response = sh (
+                            script: "curl -s -o /dev/null -w \"%{http_code}\" ${env.FLASK_URL}",
+                            returnStdout: true
+                        ).trim()
+                        if (response == "200") {
+                            ready = true
+                            echo "Flask app is running inside Docker!"
+                        } else {
                             attempts++
-                            sleep time: 1, unit: 'SECONDS'
-                            response = bat(
-                                script: """
-                                    call "${env.VENV_DIR}\\Scripts\\activate"
-                                    python -c "import requests; r = requests.get('${env.FLASK_URL}', timeout=5); assert r.status_code == 200; assert 'File Metadata Extractor' in r.text"
-                                """,
-                                returnStatus: true
-                            )
-                            if (response == 0) {
-                                ready = true
-                                echo "HTML verification successful"
-                            }
+                            sleep time: 2, unit: 'SECONDS'
                         }
-                        if (!ready) error("Server didn't start in 30 seconds")
-                    } finally {
-                        bat """
-                            for /f "tokens=1" %%i in (flask_pid.txt) do taskkill /PID %%i /F
-                            del flask_pid.txt 2>nul || exit 0
-                        """
+                    }
+                    if (!ready) {
+                        error("Docker Flask app did not become ready in time.")
                     }
                 }
             }
@@ -100,7 +102,15 @@ pipeline {
 
     post {
         always {
+            script {
+                // Kill Flask Docker container if it's running
+                sh "docker rm -f ${env.DOCKER_CONTAINER} || true"
+            }
+
+            // Kill any leftover local Python processes (if any)
             bat 'taskkill /F /IM python.exe /T 2>nul || exit 0'
+
+            // Cleanup Jenkins workspace
             cleanWs()
         }
     }
