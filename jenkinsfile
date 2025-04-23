@@ -86,14 +86,14 @@ pipeline {
                         ).trim()
                         if (response == "200") {
                             ready = true
-                            echo "Flask app is running inside Docker!"
+                            echo "Flask app (index.html) is served correctly at ${env.FLASK_URL}"
                         } else {
                             attempts++
                             sleep time: 2, unit: 'SECONDS'
                         }
                     }
                     if (!ready) {
-                        error("Docker Flask app did not become ready in time.")
+                        error(" Docker Flask app did not serve index.html within timeout.")
                     }
                 }
             }
