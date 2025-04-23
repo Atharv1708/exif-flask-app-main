@@ -74,35 +74,26 @@ pipeline {
             }
         }
 
-       stage('Verify HTML Hosting (Docker)') {
-    steps {
-        script {
-            def attempts = 0
-            def ready = false
-            while (!ready && attempts < 30) {
-                // Corrected the curl command to include the proper URL
-                def response = bat (
-                    script: "curl -s -o NUL -w \"%{http_code}\" ${env.FLASK_URL}",
-                    returnStdout: true
-                ).trim()
-                if (response == "200") {
-                    ready = true
-                    echo "Flask app (index.html) is served correctly at ${env.FLASK_URL}"
-                } else {
-                    attempts++
-                    echo "Attempt ${attempts}: Flask app is not ready, status code: ${response}"
-                    sleep time: 2, unit: 'SECONDS'
-                }
-            }
-            if (!ready) {
-                error("Docker Flask app did not serve index.html within timeout.")
-            }
-        }
-    }
-}
-
+        stage('Verify HTML Hosting (Docker)') {
+            steps {
+                script {
+                    def attempts = 0
+                    def ready = false
+                    while (!ready && attempts < 30) {
+                        def response = bat (
+                            script: "curl -s -o NUL -w \"%{http_code}\" ${env.FLASK_URL}",
+                            returnStdout: true
+                        ).trim()
+                        if (response == "200") {
+                            ready = true
+                            echo "Flask app (index.html) is served correctly at ${env.FLASK_URL}"
+                        } else {
+                            attempts++
+                            sleep time: 2, unit: 'SECONDS'
+                        }
+                    }
                     if (!ready) {
-                        error("Docker Flask app did not serve index.html within timeout.")
+                        error(" Docker Flask app did not serve index.html within timeout.")
                     }
                 }
             }
