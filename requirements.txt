@@ -1,18 +1,17 @@
-Flask==2.2.0         # Upgraded to Flask 2.x for compatibility with click>=8.0
-Werkzeug==2.2.0      # Compatible with Flask 2.x
-Pillow==10.4.0       # No changes needed
-ffmpeg-python==0.2.0 # No changes needed
-gunicorn==20.1.0     # Compatible with Flask 2.x
-exifread==3.0.0      # No changes needed
-pytest==6.2.5        # No changes needed
-pytest-cov==4.1.0    # No changes needed
-pytest-flask==1.2.0  # Compatible with Flask 2.x
-coverage==7.3.0      # No changes needed
-flake8==6.0.0        # No changes needed
-black==23.7.0        # Already compatible with Flask 2.x
-isort==5.12.0        # No changes needed
-piexif==1.1.3        # No changes needed
-python-magic==0.4.27 # No changes needed
-click==8.0.0         # Explicitly setting click version compatible with Flask 2.x and black
-Flask==2.0.1
-requests==2.26.0
+Flask>=2.0.0,<2.3.0
+Werkzeug==2.2.0
+Pillow==10.4.0
+ffmpeg-python==0.2.0
+gunicorn==20.1.0
+exifread==3.0.0
+pytest==6.2.5
+pytest-cov==4.1.0
+pytest-flask>=1.3.0
+coverage==7.3.0
+flake8==6.0.0
+black==23.7.0
+isort==5.12.0
+piexif==1.1.3
+python-magic==0.4.27
+click==8.0.0
+requests
