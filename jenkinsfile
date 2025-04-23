@@ -64,16 +64,15 @@ pipeline {
             }
         }
 
-       stage('Run Docker Container') {
-    steps {
-        bat """
-            docker rm -f ${env.DOCKER_CONTAINER} || exit 0
-            docker run -d -p 5001:5001 --name ${env.DOCKER_CONTAINER} ${env.DOCKER_IMAGE}
-        """
-        sleep time: 5, unit: 'SECONDS'
-    }
-}
-
+        stage('Run Docker Container') {
+            steps {
+                bat """
+                    docker rm -f ${env.DOCKER_CONTAINER} || exit 0
+                    docker run -d -p 5001:5001 --name ${env.DOCKER_CONTAINER} ${env.DOCKER_IMAGE}
+                """
+                sleep time: 5, unit: 'SECONDS'
+            }
+        }
 
         stage('Verify HTML Hosting (Docker)') {
             steps {
@@ -94,7 +93,7 @@ pipeline {
                         }
                     }
                     if (!ready) {
-                        error(" Docker Flask app did not serve index.html within timeout.")
+                        error("Docker Flask app did not serve index.html within timeout.")
                     }
                 }
             }
