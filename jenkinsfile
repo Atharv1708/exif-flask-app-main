@@ -81,8 +81,7 @@ pipeline {
                     def ready = false
                     while (!ready && attempts < 30) {
                         def response = bat (
-                            curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/ | grep 200                    
-                        returnStdout: true
+sh 'curl -s -o /dev/null -w "%%{http_code}" http://localhost:5001/ | grep 200'                        returnStdout: true
                         ).trim()
                         if (response == "200") {
                             ready = true
