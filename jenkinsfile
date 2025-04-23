@@ -74,50 +74,51 @@ pipeline {
             }
         }
 
-       stage('Verify HTML Hosting (Docker)') {
-    steps {
-        script {
-            def ready = false
-            def attempts = 0
-            def maxAttempts = 30
-            def waitTime = 2 // seconds
-            
-            while (!ready && attempts < maxAttempts) {
-                try {
-                    // Get container logs to help debugging
-                    def logs = bat(script: "docker logs ${env.DOCKER_CONTAINER}", returnStdout: true).trim()
-                    echo "Container logs:\n${logs}"
+        stage('Verify HTML Hosting (Docker)') {
+            steps {
+                script {
+                    def ready = false
+                    def attempts = 0
+                    def maxAttempts = 30
+                    def waitTime = 2 // seconds
                     
-                    // Check HTTP status
-                    def status = bat(
-                        script: "curl -s -o NUL -w \"%%{http_code}\" ${env.FLASK_URL} || echo 000",
-                        returnStdout: true
-                    ).trim()
-                    
-                    echo "Attempt ${attempts + 1}/${maxAttempts}: HTTP status ${status}"
-                    
-                    if (status == "200") {
-                        ready = true
-                        echo "Application is ready and serving requests"
-                    } else {
-                        attempts++
-                        sleep time: waitTime, unit: 'SECONDS'
+                    while (!ready && attempts < maxAttempts) {
+                        try {
+                            // Get container logs to help debugging
+                            def logs = bat(script: "docker logs ${env.DOCKER_CONTAINER}", returnStdout: true).trim()
+                            echo "Container logs:\n${logs}"
+                            
+                            // Check HTTP status
+                            def status = bat(
+                                script: "curl -s -o NUL -w \"%%{http_code}\" ${env.FLASK_URL} || echo 000",
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "Attempt ${attempts + 1}/${maxAttempts}: HTTP status ${status}"
+                            
+                            if (status == "200") {
+                                ready = true
+                                echo "Application is ready and serving requests"
+                            } else {
+                                attempts++
+                                sleep time: waitTime, unit: 'SECONDS'
+                            }
+                        } catch (Exception e) {
+                            attempts++
+                            echo "Attempt ${attempts}/${maxAttempts} failed: ${e.getMessage()}"
+                            sleep time: waitTime, unit: 'SECONDS'
+                        }
                     }
-                } catch (Exception e) {
-                    attempts++
-                    echo "Attempt ${attempts}/${maxAttempts} failed: ${e.getMessage()}"
-                    sleep time: waitTime, unit: 'SECONDS'
+                    
+                    if (!ready) {
+                        // Get final logs before failing
+                        def finalLogs = bat(script: "docker logs ${env.DOCKER_CONTAINER}", returnStdout: true).trim()
+                        error("Application failed to start within timeout. Final logs:\n${finalLogs}")
+                    }
                 }
-            }
-            
-            if (!ready) {
-                // Get final logs before failing
-                def finalLogs = bat(script: "docker logs ${env.DOCKER_CONTAINER}", returnStdout: true).trim()
-                error("Application failed to start within timeout. Final logs:\n${finalLogs}")
             }
         }
     }
-}
 
     post {
         always {
